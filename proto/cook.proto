@@ -37,10 +37,12 @@ message MenuItemRequest {
 }
 
 message Profile {
-    string name = 1;
-    string email = 2;
-    string phone = 3;
-    string address = 4;
+    string id = 1;
+    string username = 2;
+    string email = 3;
+    string password = 4;
+    string details = 5;
+    repeated MenuItem favorite_menus = 6;
 }
 
 message ProfileResponse {
@@ -49,11 +51,12 @@ message ProfileResponse {
 }
 
 message CookDetails {
-    string name = 1;
-    string email = 2;
-    string phone = 3;
-    string address = 4;
-    string description = 5;
+    string id = 1;
+    string username = 2;
+    string email = 3;
+    string password = 4;
+    string details = 5;
+    repeated MenuItem favorite_menus = 6;
 }
 
 message CookDetailsResponse {

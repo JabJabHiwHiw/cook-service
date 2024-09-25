@@ -7,5 +7,13 @@ type Cook struct {
 	UserName    string        `bson:"username"`
 	Email       string        `bson:"email"`
 	Password    string        `bson:"password"`
+	Details    	string        `bson:"details"`
+	FavoriteMenus []Menu `bson:"favorite_menus"`
+}
+
+type Menu struct {
+	ID          bson.ObjectID `bson:"_id,omitempty"`
+	Name        string        `bson:"name"`
 	Description string        `bson:"description"`
+	Ingredients []string      `bson:"ingredients"`
 }
