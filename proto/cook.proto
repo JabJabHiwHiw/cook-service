@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "github.com/JabJabHiwHiw/cook-service/proto";
+
+service CookService {
+    rpc ViewProfile(Empty) returns (ProfileResponse) {}
+    rpc UpdateProfile(Profile) returns (ProfileResponse) {}
+    rpc VerifyCookDetails(CookDetails) returns (CookDetailsResponse) {}
+    rpc GetFavoriteMenus(Empty) returns (MenusResponse) {}
+    rpc AddFavoriteMenu(MenuItemRequest) returns (MenuItemResponse) {}
+    rpc RemoveFavoriteMenu(MenuItemRequest) returns (MenuItemResponse) {}
+}
+
+message Empty {}
+
+message MenuItem {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    repeated string ingredients = 4;
+}
+
+message MenuItemResponse {
+    MenuItem item = 1;
+    string error = 2;
+}
+
+message MenusResponse {
+    repeated MenuItem menus = 1;
+    string error = 2;
+}
+
+message MenuItemRequest {
+    string id = 1;
+}
+
+message Profile {
+    string name = 1;
+    string email = 2;
+    string phone = 3;
+    string address = 4;
+}
+
+message ProfileResponse {
+    Profile profile = 1;
+    string error = 2;
+}
+
+message CookDetails {
+    string name = 1;
+    string email = 2;
+    string phone = 3;
+    string address = 4;
+    string description = 5;
+}
+
+message CookDetailsResponse {
+    CookDetails details = 1;
+    string error = 2;
+}
+
