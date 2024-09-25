@@ -24,6 +24,7 @@ func (s *CookService) ViewProfile(ctx context.Context, req *proto.Empty) (*proto
 	// Assume cookID is obtained from context (e.g., via authentication middleware)
 	cookID, ok := ctx.Value("cookID").(string)
 	if !ok || cookID == "" {
+		fmt.Println(cookID)
 		return nil, fmt.Errorf("unable to retrieve cook ID from context")
 	}
 
@@ -83,9 +84,9 @@ func (s *CookService) UpdateProfile(ctx context.Context, req *proto.Profile) (*p
 	// Build the update document
 	update := bson.M{
 		"$set": bson.M{
-			"username": req.Username,
-			"email":    req.Email,
-			"details":  req.Details,
+			"username": req.GetUsername(),
+			"email":    req.GetEmail(),
+			"details":  req.GetDetails(),
 			// "password": req.Password, // If updating the password
 		},
 	}
@@ -104,7 +105,7 @@ func (s *CookService) UpdateProfile(ctx context.Context, req *proto.Profile) (*p
 func (s *CookService) VerifyCookDetails(ctx context.Context, req *proto.CookDetails) (*proto.CookDetailsResponse, error) {
 	// Find the cook by email
 	var cook models.Cook
-	err := s.CookCollection.FindOne(ctx, bson.M{"email": req.Email}).Decode(&cook)
+	err := s.CookCollection.FindOne(ctx, bson.M{"email": req.GetEmail()}).Decode(&cook)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, fmt.Errorf("cook not found")
@@ -113,7 +114,7 @@ func (s *CookService) VerifyCookDetails(ctx context.Context, req *proto.CookDeta
 	}
 
 	// Verify the password (assuming plain text for simplicity; use hashing in production)
-	if cook.Password != req.Password {
+	if cook.Password != req.GetPassword() {
 		return nil, fmt.Errorf("invalid password")
 	}
 
@@ -193,7 +194,7 @@ func (s *CookService) AddFavoriteMenu(ctx context.Context, req *proto.MenuItemRe
 		return nil, fmt.Errorf("invalid cook ID")
 	}
 
-	menuObjectID, err := bson.ObjectIDFromHex(req.Id)
+	menuObjectID, err := bson.ObjectIDFromHex(req.GetId())
 	if err != nil {
 		return nil, fmt.Errorf("invalid menu ID")
 	}
@@ -246,7 +247,7 @@ func (s *CookService) RemoveFavoriteMenu(ctx context.Context, req *proto.MenuIte
 		return nil, fmt.Errorf("invalid cook ID")
 	}
 
-	menuObjectID, err := bson.ObjectIDFromHex(req.Id)
+	menuObjectID, err := bson.ObjectIDFromHex(req.GetId())
 	if err != nil {
 		return nil, fmt.Errorf("invalid menu ID")
 	}
