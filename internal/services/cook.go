@@ -8,6 +8,7 @@ import (
 	"github.com/JabJabHiwHiw/cook-service/proto"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"google.golang.org/grpc/metadata"
 )
 
 var _ proto.CookServiceServer = (*CookService)(nil)
@@ -16,13 +17,15 @@ type CookService struct {
 	proto.UnimplementedCookServiceServer
 	CookCollection *mongo.Collection
 	MenuCollection *mongo.Collection
-	// Collection *mongo.Collection
 }
 
 // ViewProfile retrieves the cook's profile based on the cook ID from the context.
 func (s *CookService) ViewProfile(ctx context.Context, req *proto.Empty) (*proto.ProfileResponse, error) {
-	// Assume cookID is obtained from context (e.g., via authentication middleware)
-	cookID, ok := ctx.Value("cookID").(string)
+	md, ok := metadata.FromIncomingContext(ctx)
+	var cookID string
+	if ok {
+		cookID = md.Get("cookID")[0]
+	  }
 	if !ok || cookID == "" {
 		fmt.Println(cookID)
 		return nil, fmt.Errorf("unable to retrieve cook ID from context")
@@ -71,9 +74,10 @@ func (s *CookService) ViewProfile(ctx context.Context, req *proto.Empty) (*proto
 // UpdateProfile updates the cook's profile information.
 func (s *CookService) UpdateProfile(ctx context.Context, req *proto.Profile) (*proto.ProfileResponse, error) {
 	// Get cookID from context
-	cookID, ok := ctx.Value("cookID").(string)
-	if !ok || cookID == "" {
-		return nil, fmt.Errorf("unable to retrieve cook ID from context")
+	var cookID string
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		cookID = md.Get("cookID")[0]
 	}
 
 	objectID, err := bson.ObjectIDFromHex(cookID)
@@ -145,9 +149,10 @@ func (s *CookService) VerifyCookDetails(ctx context.Context, req *proto.CookDeta
 // GetFavoriteMenus retrieves the cook's favorite menus.
 func (s *CookService) GetFavoriteMenus(ctx context.Context, req *proto.Empty) (*proto.MenusResponse, error) {
 	// Get cookID from context
-	cookID, ok := ctx.Value("cookID").(string)
-	if !ok || cookID == "" {
-		return nil, fmt.Errorf("unable to retrieve cook ID from context")
+	var cookID string
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		cookID = md.Get("cookID")[0]
 	}
 
 	objectID, err := bson.ObjectIDFromHex(cookID)
@@ -184,9 +189,10 @@ func (s *CookService) GetFavoriteMenus(ctx context.Context, req *proto.Empty) (*
 // AddFavoriteMenu adds a menu to the cook's list of favorite menus.
 func (s *CookService) AddFavoriteMenu(ctx context.Context, req *proto.MenuItemRequest) (*proto.MenuItemResponse, error) {
 	// Get cookID from context
-	cookID, ok := ctx.Value("cookID").(string)
-	if !ok || cookID == "" {
-		return nil, fmt.Errorf("unable to retrieve cook ID from context")
+	var cookID string
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		cookID = md.Get("cookID")[0]
 	}
 
 	cookObjectID, err := bson.ObjectIDFromHex(cookID)
@@ -237,9 +243,10 @@ func (s *CookService) AddFavoriteMenu(ctx context.Context, req *proto.MenuItemRe
 // RemoveFavoriteMenu removes a menu from the cook's list of favorite menus.
 func (s *CookService) RemoveFavoriteMenu(ctx context.Context, req *proto.MenuItemRequest) (*proto.MenuItemResponse, error) {
 	// Get cookID from context
-	cookID, ok := ctx.Value("cookID").(string)
-	if !ok || cookID == "" {
-		return nil, fmt.Errorf("unable to retrieve cook ID from context")
+	var cookID string
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		cookID = md.Get("cookID")[0]
 	}
 
 	cookObjectID, err := bson.ObjectIDFromHex(cookID)
