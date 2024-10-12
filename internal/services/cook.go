@@ -3,59 +3,81 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/JabJabHiwHiw/cook-service/internal/models"
 	"github.com/JabJabHiwHiw/cook-service/proto"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc/metadata"
 )
 
-var _ proto.CookServiceServer = (*CookService)(nil)
-
 type CookService struct {
 	proto.UnimplementedCookServiceServer
-	CookCollection *mongo.Collection
-	MenuCollection *mongo.Collection
-	DBPool         *pgxpool.Pool
+	DBPool *pgxpool.Pool
 }
 
-// ViewProfile retrieves the cook's profile based on the cook ID from the context.
+func (s *CookService) VerifyCookDetails(ctx context.Context, req *proto.Profile) (*proto.ProfileResponse, error) {
+	// Check if the cook already exists by email or name
+	var existingCookID int64
+	err := s.DBPool.QueryRow(ctx,
+		"SELECT id FROM cooks WHERE email=$1 OR name=$2",
+		req.GetEmail(), req.GetName()).Scan(&existingCookID)
+	if err == nil {
+		return nil, fmt.Errorf("cook already exists with the given email or name")
+	} else if err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("failed to check existing cook: %v", err)
+	}
+
+	// Hash the password
+	hashedPassword := hashPassword(req.GetPassword())
+
+	// Insert the new cook
+	var newCookID int64
+	err = s.DBPool.QueryRow(ctx,
+		`INSERT INTO cooks (name, email, password, profile_picture)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+		req.GetName(), req.GetEmail(), hashedPassword, req.GetProfilePicture()).Scan(&newCookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register cook: %v", err)
+	}
+
+	return &proto.ProfileResponse{
+		Profile: &proto.Profile{
+			Id:             fmt.Sprintf("%d", newCookID),
+			Name:           req.GetName(),
+			Email:          req.GetEmail(),
+			ProfilePicture: req.GetProfilePicture(),
+		},
+	}, nil
+}
+
 func (s *CookService) ViewProfile(ctx context.Context, req *proto.Empty) (*proto.ProfileResponse, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	var cookID string
-	if ok {
+	if ok && len(md.Get("cookID")) > 0 {
 		cookID = md.Get("cookID")[0]
-	}
-	if !ok || cookID == "" {
-		fmt.Println(cookID)
+	} else {
 		return nil, fmt.Errorf("unable to retrieve cook ID from context")
 	}
 
-	// Convert cookID to ObjectID
-	objectID, err := bson.ObjectIDFromHex(cookID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid cook ID")
-	}
-
-	// Find the cook
 	var cook models.Cook
-	err = s.CookCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&cook)
+	err := s.DBPool.QueryRow(ctx,
+		"SELECT id, name, email, profile_picture FROM cooks WHERE id=$1", cookID).
+		Scan(&cook.ID, &cook.Name, &cook.Email, &cook.ProfilePicture)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("cook not found")
 		}
 		return nil, err
 	}
 
-	// Map models.Cook to proto.Profile
 	profile := &proto.Profile{
-		Id:             cook.ID.Hex(),
+		Id:             fmt.Sprintf("%d", cook.ID),
 		Name:           cook.Name,
 		Email:          cook.Email,
-		ProfilePicture: cook.Profile_picture,
-		// Do not include the password in the response
+		ProfilePicture: cook.ProfilePicture,
 	}
 
 	return &proto.ProfileResponse{
@@ -63,25 +85,19 @@ func (s *CookService) ViewProfile(ctx context.Context, req *proto.Empty) (*proto
 	}, nil
 }
 
-// UpdateProfile updates the cook's profile information.
 func (s *CookService) UpdateProfile(ctx context.Context, req *proto.Profile) (*proto.ProfileResponse, error) {
-	var cookID string
 	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
+	var cookID string
+	if ok && len(md.Get("cookID")) > 0 {
 		cookID = md.Get("cookID")[0]
-	}
-
-	objectID, err := bson.ObjectIDFromHex(cookID)
-	if err != nil {
+	} else {
 		return nil, fmt.Errorf("invalid cook ID")
 	}
-	update := models.Cook{
-		Name:            req.GetName(),
-		Email:           req.GetEmail(),
-		Profile_picture: req.GetProfilePicture(),
-	}
 
-	_, err = s.CookCollection.UpdateOne(ctx, bson.M{"_id": objectID}, bson.M{"$set": update})
+	// Update the cook's profile
+	_, err := s.DBPool.Exec(ctx,
+		`UPDATE cooks SET name=$1, email=$2, profile_picture=$3 WHERE id=$4`,
+		req.GetName(), req.GetEmail(), req.GetProfilePicture(), cookID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,37 +105,10 @@ func (s *CookService) UpdateProfile(ctx context.Context, req *proto.Profile) (*p
 	return s.ViewProfile(ctx, &proto.Empty{})
 }
 
-func (s *CookService) VerifyCookDetails(ctx context.Context, req *proto.Profile) (*proto.ProfileResponse, error) {
-	var existingCook models.Cook
-	filter := bson.M{"$or": []bson.M{{"email": req.GetEmail()}, {"username": req.GetName()}}}
-	err := s.CookCollection.FindOne(ctx, filter).Decode(&existingCook)
-	if err == nil {
-		return nil, fmt.Errorf("cook already exists with the given email or username")
-	}
-
-	cook := models.Cook{
-		Name:            req.GetName(),
-		Email:           req.GetEmail(),
-		Password:        hashPassword(req.GetPassword()),
-		Profile_picture: req.GetProfilePicture(),
-	}
-
-	result, err := s.CookCollection.InsertOne(ctx, cook)
-	if err != nil {
-		return nil, fmt.Errorf("failed to register cook: %v", err)
-	}
-
-	return &proto.ProfileResponse{
-		Profile: &proto.Profile{
-			Id:             result.InsertedID.(bson.ObjectID).Hex(),
-			Name:           cook.Name,
-			Email:          cook.Email,
-			ProfilePicture: cook.Profile_picture,
-			// Password:       cook.Password,
-		},
-	}, nil
-}
-
 func hashPassword(password string) string {
-	return password
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("Failed to hash password: %v", err)
+	}
+	return string(bytes)
 }

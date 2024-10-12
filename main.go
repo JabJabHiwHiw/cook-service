@@ -2,43 +2,30 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net"
-	"time"
 
 	"github.com/JabJabHiwHiw/cook-service/internal/services"
 	"github.com/JabJabHiwHiw/cook-service/proto"
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
-
+	// Set up PostgreSQL connection
+	connString := "postgres://user:pass@localhost:5432/cook_service"
+	dbPool, err := pgxpool.Connect(context.Background(), connString)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
+	defer dbPool.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	defer func() {
-		if err := client.Disconnect(ctx); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	fmt.Println("Connected to MongoDB")
-
-	db := client.Database("cook-service")
-	cookCollection := db.Collection("cook")
-	menuCollection := db.Collection("menu")
+	fmt.Println("Connected to PostgreSQL")
 
 	cookService := services.CookService{
-		CookCollection: cookCollection,
-		MenuCollection: menuCollection,
+		DBPool: dbPool,
 	}
 
 	grpcServer := grpc.NewServer()
@@ -51,8 +38,17 @@ func main() {
 
 	fmt.Println("Server started on port :8080")
 
+	db, err := sql.Open("postgres", "your-connection-string-here")
+	if err != nil {
+		log.Fatal("Error connecting to the database: ", err)
+	}
+
+	err = InitializeDB(db)
+	if err != nil {
+		log.Fatal("Error initializing database: ", err)
+	}
+
 	if err := grpcServer.Serve(listener); err != nil {
 		log.Fatal(err)
 	}
-
 }

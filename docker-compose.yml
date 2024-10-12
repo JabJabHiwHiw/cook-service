@@ -1,15 +1,15 @@
 services:
-  mongodb:
-    image: mongodb/mongodb-community-server:7.0.7-ubi8
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=user
-      - MONGO_INITDB_ROOT_PASSWORD=pass
-    # volumes:
-    #   - type: bind
-    #     source: ./data
-    #     target: /data/db
-    ports:
-      - "27017:27017"
+  # mongodb:
+  #   image: mongodb/mongodb-community-server:7.0.7-ubi8
+  #   environment:
+  #     - MONGO_INITDB_ROOT_USERNAME=user
+  #     - MONGO_INITDB_ROOT_PASSWORD=pass
+  #   # volumes:
+  #   #   - type: bind
+  #   #     source: ./data
+  #   #     target: /data/db
+  #   ports:
+  #     - "27017:27017"
 
   postgres:
     image: postgres:14
@@ -19,7 +19,7 @@ services:
       - POSTGRES_DB=cook_service
     ports:
       - "5432:5432"
-    # volumes:
-    #   - postgres_data:/var/lib/postgresql/data
-# volumes:
-#   postgres_data:
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:
