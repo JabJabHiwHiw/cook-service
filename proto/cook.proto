@@ -7,10 +7,11 @@ option go_package = "github.com/JabJabHiwHiw/cook-service/proto";
 service CookService {
     rpc ViewProfile(Empty) returns (ProfileResponse) {}
     rpc UpdateProfile(Profile) returns (ProfileResponse) {}
-    rpc VerifyCookDetails(CookDetails) returns (CookDetailsResponse) {}
-    rpc GetFavoriteMenus(Empty) returns (MenusResponse) {}
-    rpc AddFavoriteMenu(MenuItemRequest) returns (MenuItemResponse) {}
-    rpc RemoveFavoriteMenu(MenuItemRequest) returns (MenuItemResponse) {}
+    rpc VerifyCookDetails(Profile) returns (ProfileResponse) {}
+    // rpc RegisterCook(CookDetails) returns (CookDetailsResponse) {}
+    // rpc GetFavoriteMenus(Empty) returns (MenusResponse) {}
+    // rpc AddFavoriteMenu(MenuItemRequest) returns (MenuItemResponse) {}
+    // rpc RemoveFavoriteMenu(MenuItemRequest) returns (MenuItemResponse) {}
 }
 
 message Empty {}
@@ -38,29 +39,14 @@ message MenuItemRequest {
 
 message Profile {
     string id = 1;
-    string username = 2;
+    string name = 2;
     string email = 3;
     string password = 4;
-    string details = 5;
-    repeated MenuItem favorite_menus = 6;
+    string profile_picture = 5;
 }
 
 message ProfileResponse {
     Profile profile = 1;
-    string error = 2;
-}
-
-message CookDetails {
-    string id = 1;
-    string username = 2;
-    string email = 3;
-    string password = 4;
-    string details = 5;
-    repeated MenuItem favorite_menus = 6;
-}
-
-message CookDetailsResponse {
-    CookDetails details = 1;
     string error = 2;
 }
 
