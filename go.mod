@@ -4,6 +4,7 @@ go 1.23.1
 
 require (
 	github.com/jackc/pgx/v4 v4.18.3
+	github.com/lib/pq v1.10.9
 	golang.org/x/crypto v0.24.0
 	google.golang.org/grpc v1.66.2
 )
