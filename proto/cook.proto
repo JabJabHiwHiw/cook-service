@@ -5,43 +5,32 @@ package proto;
 option go_package = "github.com/JabJabHiwHiw/cook-service/proto";
 
 service CookService {
-    rpc ViewProfile(Empty) returns (ProfileResponse) {}
-    rpc UpdateProfile(Profile) returns (ProfileResponse) {}
-    rpc VerifyCookDetails(Profile) returns (ProfileResponse) {}
-    // rpc RegisterCook(CookDetails) returns (CookDetailsResponse) {}
-    // rpc GetFavoriteMenus(Empty) returns (MenusResponse) {}
-    // rpc AddFavoriteMenu(MenuItemRequest) returns (MenuItemResponse) {}
-    // rpc RemoveFavoriteMenu(MenuItemRequest) returns (MenuItemResponse) {}
+    rpc ViewProfile(Empty) returns (ProfileResponse);
+    rpc UpdateProfile(Profile) returns (ProfileResponse);
+    rpc VerifyCookDetails(Profile) returns (ProfileResponse);
+    rpc GetFavoriteMenus(Empty) returns (FavoriteMenusResponse);
+    rpc AddFavoriteMenu(FavoriteMenu) returns (FavoriteMenusResponse);
+    rpc RemoveFavoriteMenu(FavoriteMenu) returns (FavoriteMenusResponse);
 }
 
 message Empty {}
 
-message MenuItem {
-    string id = 1;
-    string name = 2;
-    string description = 3;
-    repeated string ingredients = 4;
+message FavoriteMenu {
+    string id = 1; // UUID represented as string
+    string menu_id = 2; // UUID represented as string
+    string added_at = 3; // Timestamp or DateTime format as string
 }
 
-message MenuItemResponse {
-    MenuItem item = 1;
+message FavoriteMenusResponse {
+    repeated FavoriteMenu favorite_menus = 1;
     string error = 2;
-}
-
-message MenusResponse {
-    repeated MenuItem menus = 1;
-    string error = 2;
-}
-
-message MenuItemRequest {
-    string id = 1;
 }
 
 message Profile {
-    string id = 1;
+    string id = 1; // UUID represented as string
     string name = 2;
     string email = 3;
-    string password = 4;
+    string password = 4; // Note: Exposing passwords even in protobufs may be unsafe
     string profile_picture = 5;
 }
 
@@ -49,4 +38,3 @@ message ProfileResponse {
     Profile profile = 1;
     string error = 2;
 }
-

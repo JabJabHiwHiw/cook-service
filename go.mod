@@ -3,6 +3,7 @@ module github.com/JabJabHiwHiw/cook-service
 go 1.23.1
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/lib/pq v1.10.9
 	golang.org/x/crypto v0.24.0
@@ -10,6 +11,7 @@ require (
 )
 
 require (
+	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.3 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -21,7 +23,6 @@ require (
 )
 
 require (
-	go.mongodb.org/mongo-driver/v2 v2.0.0-beta1
 	golang.org/x/net v0.26.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
