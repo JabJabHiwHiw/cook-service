@@ -31,15 +31,15 @@ func (s *CookService) VerifyCookDetails(ctx context.Context, req *proto.Profile)
 		return nil, fmt.Errorf("failed to check existing cook (check): %v", err)
 	}
 
-	// Hash the password
-	hashedPassword := hashPassword(req.GetPassword())
+	// Hash the cid
+	hashedClerkId := hashClerkId(req.GetClerkId())
 
 	// Insert the new cook
 	newCookID := uuid.New() // Generate a new UUID
 	err = s.DBPool.QueryRow(ctx,
-		`INSERT INTO cooks (id, name, email, password, profile_picture)
+		`INSERT INTO cooks (id, name, email, clerk_id, profile_picture)
 		 VALUES ($1, $2, $3, $4, $5) RETURNING id`, // Include id in the insert
-		newCookID, req.GetName(), req.GetEmail(), hashedPassword, req.GetProfilePicture()).Scan(&newCookID)
+		newCookID, req.GetName(), req.GetEmail(), hashedClerkId, req.GetProfilePicture()).Scan(&newCookID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register cook (insert): %v", err)
 	}
@@ -116,10 +116,10 @@ func (s *CookService) UpdateProfile(ctx context.Context, req *proto.Profile) (*p
 	return s.ViewProfile(ctx, &proto.Empty{})
 }
 
-func hashPassword(password string) string {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+func hashClerkId(clerkId string) string {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(clerkId), bcrypt.DefaultCost)
 	if err != nil {
-		log.Fatalf("Failed to hash password: %v", err)
+		log.Fatalf("Failed to hash clerkId: %v", err)
 	}
 	return string(bytes)
 }

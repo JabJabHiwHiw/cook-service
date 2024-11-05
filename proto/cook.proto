@@ -30,7 +30,7 @@ message Profile {
     string id = 1; // UUID represented as string
     string name = 2;
     string email = 3;
-    string password = 4; // Note: Exposing passwords even in protobufs may be unsafe
+    string clerk_id = 4; // Note: Exposing passwords even in protobufs may be unsafe
     string profile_picture = 5;
 }
 
