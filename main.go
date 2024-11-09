@@ -11,8 +11,36 @@ import (
 )
 
 func InitializeDB(db *sql.DB) error {
-	// Your existing DB initialization logic
-	// ...
+	// Query to create the `cooks` table
+	cooksTableQuery := `
+    CREATE TABLE IF NOT EXISTS cooks (
+        id UUID PRIMARY KEY,
+        name VARCHAR(255) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        clerk_id VARCHAR(255) NOT NULL,
+        profile_picture TEXT
+    );`
+
+	// Execute the query to create the `cooks` table
+	if _, err := db.Exec(cooksTableQuery); err != nil {
+		return err
+	}
+
+	// Query to create the `favorite_menus` table
+	favoriteMenusTableQuery := `
+    CREATE TABLE IF NOT EXISTS favorite_menus (
+        id UUID PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES cooks(id),
+        menu_id UUID NOT NULL,
+        added_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, menu_id)  -- Ensure that each user-menu pair is unique
+    );`
+
+	// Execute the query to create the `favorite_menus` table
+	if _, err := db.Exec(favoriteMenusTableQuery); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -39,6 +67,7 @@ func main() {
 	router := gin.Default()
 
 	// Define RESTful routes
+	router.GET("/", cookService.TestGet)
 	router.GET("/profile", cookService.ViewProfile)
 	router.PUT("/profile", cookService.UpdateProfile)
 	router.POST("/register", cookService.VerifyCookDetails)

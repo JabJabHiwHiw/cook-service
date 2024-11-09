@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/JabJabHiwHiw/cook-service/internal/models"
 	"github.com/gin-gonic/gin"
@@ -13,6 +14,10 @@ import (
 
 type CookService struct {
 	DB *sql.DB
+}
+
+func (s *CookService) TestGet(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "Cook service is up and running"})
 }
 
 // Register a new cook
@@ -92,6 +97,7 @@ func (s *CookService) ViewProfile(c *gin.Context) {
 
 // Update cook profile
 func (s *CookService) UpdateProfile(c *gin.Context) {
+	// Securely retrieve cookID from context
 	cookIDStr := c.GetHeader("cookID")
 	if cookIDStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cook ID is required in header"})
@@ -106,20 +112,107 @@ func (s *CookService) UpdateProfile(c *gin.Context) {
 
 	var req models.Profile
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	_, err = s.DB.Exec(
-		`UPDATE cooks SET name=$1, email=$2, profile_picture=$3 WHERE id=$4`,
-		req.Name, req.Email, req.ProfilePicture, cookID,
-	)
+	// Begin transaction
+	tx, err := s.DB.Begin()
 	if err != nil {
+		// log.Errorf("Failed to begin transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Check for existing email or name
+	if req.Email != "" || req.Name != "" {
+		conditions := []string{}
+		args := []interface{}{}
+		argID := 1
+
+		if req.Email != "" {
+			conditions = append(conditions, fmt.Sprintf("email=$%d", argID))
+			args = append(args, req.Email)
+			argID++
+		}
+		if req.Name != "" {
+			conditions = append(conditions, fmt.Sprintf("name=$%d", argID))
+			args = append(args, req.Name)
+			argID++
+		}
+
+		args = append(args, cookID)
+		checkQuery := fmt.Sprintf("SELECT id FROM cooks WHERE (%s) AND id != $%d", strings.Join(conditions, " OR "), argID)
+
+		var existingCookID uuid.UUID
+		err := tx.QueryRow(checkQuery, args...).Scan(&existingCookID)
+		if err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email or name is already in use"})
+			return
+		} else if err != sql.ErrNoRows {
+			// log.Errorf("Error checking existing cook: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			return
+		}
+	}
+
+	// Build the UPDATE statement
+	updates := []string{}
+	args := []interface{}{}
+	argID := 1
+
+	if req.Name != "" {
+		updates = append(updates, fmt.Sprintf("name=$%d", argID))
+		args = append(args, req.Name)
+		argID++
+	}
+	if req.Email != "" {
+		updates = append(updates, fmt.Sprintf("email=$%d", argID))
+		args = append(args, req.Email)
+		argID++
+	}
+	if req.ProfilePicture != "" {
+		updates = append(updates, fmt.Sprintf("profile_picture=$%d", argID))
+		args = append(args, req.ProfilePicture)
+		argID++
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No fields to update"})
+		return
+	}
+
+	args = append(args, cookID)
+	query := fmt.Sprintf("UPDATE cooks SET %s WHERE id=$%d", strings.Join(updates, ", "), argID)
+
+	// Execute the update
+	_, err = tx.Exec(query, args...)
+	if err != nil {
+		// log.Errorf("Failed to update profile for cookID %s: %v", cookID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
 		return
 	}
 
-	s.ViewProfile(c)
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		// log.Errorf("Failed to commit transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+
+	// Retrieve and return the updated profile
+	var updatedProfile models.Profile
+	err = s.DB.QueryRow(
+		"SELECT name, email, profile_picture FROM cooks WHERE id=$1",
+		cookID,
+	).Scan(&updatedProfile.Name, &updatedProfile.Email, &updatedProfile.ProfilePicture)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve updated profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"profile": updatedProfile})
 }
 
 // Get favorite menus
