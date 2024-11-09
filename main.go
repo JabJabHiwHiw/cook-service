@@ -1,17 +1,13 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
-	"net"
 
 	"github.com/JabJabHiwHiw/cook-service/internal/services"
-	"github.com/JabJabHiwHiw/cook-service/proto"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
-	"google.golang.org/grpc"
 )
 
 func InitializeDB(db *sql.DB) error {
@@ -49,43 +45,38 @@ func InitializeDB(db *sql.DB) error {
 }
 
 func main() {
-	// Set up PostgreSQL connection
-	connString := "postgres://user:pass@localhost:5432/cook_service"
-	dbPool, err := pgxpool.Connect(context.Background(), connString)
-	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
-	}
-	defer dbPool.Close()
-
-	fmt.Println("Connected to PostgreSQL")
-
-	cookService := services.CookService{
-		DBPool: dbPool,
-	}
-
-	grpcServer := grpc.NewServer()
-	proto.RegisterCookServiceServer(grpcServer, &cookService)
-
-	listener, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("Server started on port :8080")
-
+	// PostgreSQL connection
 	connStr := "postgres://user:pass@localhost:5432/cook_service?sslmode=disable"
-
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal("Error connecting to the database: ", err)
 	}
+	defer db.Close()
+
+	fmt.Println("Connected to PostgreSQL")
 
 	err = InitializeDB(db)
 	if err != nil {
 		log.Fatal("Error initializing database: ", err)
 	}
 
-	if err := grpcServer.Serve(listener); err != nil {
+	cookService := services.CookService{
+		DB: db,
+	}
+
+	router := gin.Default()
+
+	// Define RESTful routes
+	router.GET("/", cookService.TestGet)
+	router.GET("/profile", cookService.ViewProfile)
+	router.PUT("/profile", cookService.UpdateProfile)
+	router.POST("/register", cookService.VerifyCookDetails)
+	router.GET("/favorite-menus", cookService.GetFavoriteMenus)
+	router.POST("/favorite-menus", cookService.AddFavoriteMenu)
+	router.DELETE("/favorite-menus/:menu_id", cookService.RemoveFavoriteMenu)
+
+	fmt.Println("Server started on port :8080")
+	if err := router.Run(":8080"); err != nil {
 		log.Fatal(err)
 	}
 }
