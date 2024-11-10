@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-
+	"github.com/gin-contrib/cors"
 	"github.com/JabJabHiwHiw/cook-service/internal/services"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
@@ -64,6 +64,15 @@ func main() {
 	}
 
 	router := gin.Default()
+
+	config := cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}
+
+	router.Use(cors.New(config))
 
 	router.GET("/user/", cookService.TestGet)
 	router.GET("/user/profile", cookService.ViewProfile)
