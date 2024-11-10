@@ -46,7 +46,7 @@ func InitializeDB(db *sql.DB) error {
 
 func main() {
 	// PostgreSQL connection
-	connStr := "postgres://user:pass@localhost:5432/cook_service?sslmode=disable"
+    connStr := "postgres://user:pass@postgres:5432/cook_service?sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal("Error connecting to the database: ", err)
@@ -67,13 +67,13 @@ func main() {
 	router := gin.Default()
 
 	// Define RESTful routes
-	router.GET("/", cookService.TestGet)
-	router.GET("/profile", cookService.ViewProfile)
-	router.PUT("/profile", cookService.UpdateProfile)
-	router.POST("/register", cookService.VerifyCookDetails)
-	router.GET("/favorite-menus", cookService.GetFavoriteMenus)
-	router.POST("/favorite-menus", cookService.AddFavoriteMenu)
-	router.DELETE("/favorite-menus/:menu_id", cookService.RemoveFavoriteMenu)
+	router.GET("/user/", cookService.TestGet)
+	router.GET("/user/profile", cookService.ViewProfile)
+	router.PUT("/user/profile", cookService.UpdateProfile)
+	router.POST("/user/register", cookService.VerifyCookDetails)
+	router.GET("/user/favorite-menus", cookService.GetFavoriteMenus)
+	router.POST("/user/favorite-menus", cookService.AddFavoriteMenu)
+	router.DELETE("/user/favorite-menus/:menu_id", cookService.RemoveFavoriteMenu)
 
 	fmt.Println("Server started on port :8080")
 	if err := router.Run(":8080"); err != nil {
