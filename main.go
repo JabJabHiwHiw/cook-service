@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/JabJabHiwHiw/cook-service/internal/services"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
@@ -46,7 +45,7 @@ func InitializeDB(db *sql.DB) error {
 }
 
 func main() {
-	connStr := "postgres://user:pass@localhost:5432/cook_service?sslmode=disable"
+    connStr := "postgres://user:pass@postgres:5432/cook_service?sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal("Error connecting to the database: ", err)
@@ -65,15 +64,6 @@ func main() {
 	}
 
 	router := gin.Default()
-
-	config := cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "Authorization"},
-		AllowCredentials: true,
-	}
-
-	router.Use(cors.New(config))
 
 	router.GET("/user/", cookService.TestGet)
 	router.GET("/user/profile", cookService.ViewProfile)
