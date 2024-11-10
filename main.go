@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"github.com/gin-contrib/cors"
+
 	"github.com/JabJabHiwHiw/cook-service/internal/services"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
@@ -15,7 +16,7 @@ func InitializeDB(db *sql.DB) error {
 	cooksTableQuery := `
     CREATE TABLE IF NOT EXISTS cooks (
         id UUID PRIMARY KEY,
-        name VARCHAR(255) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         clerk_id VARCHAR(255) NOT NULL,
         profile_picture TEXT
@@ -45,7 +46,7 @@ func InitializeDB(db *sql.DB) error {
 }
 
 func main() {
-    connStr := "postgres://user:pass@postgres:5432/cook_service?sslmode=disable"
+	connStr := "postgres://user:pass@localhost:5432/cook_service?sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal("Error connecting to the database: ", err)
@@ -77,6 +78,7 @@ func main() {
 	router.GET("/user/", cookService.TestGet)
 	router.GET("/user/profile", cookService.ViewProfile)
 	router.PUT("/user/profile", cookService.UpdateProfile)
+	router.POST("/user/oauth/google", cookService.HandleGoogleOAuth)
 	router.POST("/user/register", cookService.VerifyCookDetails)
 	router.GET("/user/favorite-menus", cookService.GetFavoriteMenus)
 	router.POST("/user/favorite-menus", cookService.AddFavoriteMenu)

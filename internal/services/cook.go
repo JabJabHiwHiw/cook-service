@@ -16,6 +16,76 @@ type CookService struct {
 	DB *sql.DB
 }
 
+// HandleGoogleOAuth handles Google OAuth authentication via Clerk
+func (s *CookService) HandleGoogleOAuth(c *gin.Context) {
+	// Define a struct to hold the incoming data
+	type OAuthRequest struct {
+		ClerkUserID    string `json:"clerk_user_id" binding:"required"`
+		Name           string `json:"name" binding:"required"`
+		Email          string `json:"email" binding:"required"`
+		ProfilePicture string `json:"profile_picture"`
+	}
+
+	var req OAuthRequest
+
+	// Bind the JSON body to the struct
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	var existingUser models.Cook
+	err := s.DB.QueryRow(
+		"SELECT id, name, email, clerk_id, profile_picture FROM cooks WHERE clerk_id=$1",
+		req.ClerkUserID,
+	).Scan(&existingUser.ID, &existingUser.Name, &existingUser.Email, &existingUser.ClerkId, &existingUser.ProfilePicture)
+
+	if err == sql.ErrNoRows {
+		// User does not exist; register them
+		newUserID := uuid.New()
+
+		_, err = s.DB.Exec(
+			`INSERT INTO cooks (id, name, email, clerk_id, profile_picture)
+             VALUES ($1, $2, $3, $4, $5)`,
+			newUserID, req.Name, req.Email, req.ClerkUserID, req.ProfilePicture,
+		)
+		if err != nil {
+			// Log the error for debugging
+			fmt.Printf("Error inserting user: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+			return
+		}
+
+		existingUser = models.Cook{
+			ID:             newUserID,
+			Name:           req.Name,
+			Email:          req.Email,
+			ClerkId:        req.ClerkUserID,
+			ProfilePicture: req.ProfilePicture,
+		}
+	} else if err != nil {
+		// Database error
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	} else {
+		// User exists; update their clerk_id if different
+		if existingUser.ClerkId != req.ClerkUserID {
+			_, err = s.DB.Exec(
+				"UPDATE cooks SET clerk_id=$1 WHERE id=$2",
+				req.ClerkUserID, existingUser.ID,
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+				return
+			}
+			existingUser.ClerkId = req.ClerkUserID
+		}
+	}
+
+	// Return the user's backend userId (UUID)
+	c.JSON(http.StatusOK, gin.H{"user_id": existingUser.ID})
+}
+
 func (s *CookService) TestGet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Cook service is up and running"})
 }
