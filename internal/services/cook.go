@@ -2,355 +2,104 @@ package services
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
-	"strings"
 
-	"github.com/JabJabHiwHiw/cook-service/internal/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
+// CookService represents the service handling cook-related operations.
 type CookService struct {
 	DB *sql.DB
 }
 
-// HandleGoogleOAuth handles Google OAuth authentication via Clerk
-func (s *CookService) HandleGoogleOAuth(c *gin.Context) {
-	// Define a struct to hold the incoming data
-	type OAuthRequest struct {
-		ClerkUserID    string `json:"clerk_user_id" binding:"required"`
-		Name           string `json:"name" binding:"required"`
-		Email          string `json:"email" binding:"required"`
-		ProfilePicture string `json:"profile_picture"`
-	}
-
-	var req OAuthRequest
-
-	// Bind the JSON body to the struct
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
-		return
-	}
-
-	var existingUser models.Cook
-	err := s.DB.QueryRow(
-		"SELECT id, name, email, clerk_id, profile_picture FROM cooks WHERE clerk_id=$1",
-		req.ClerkUserID,
-	).Scan(&existingUser.ID, &existingUser.Name, &existingUser.Email, &existingUser.ClerkId, &existingUser.ProfilePicture)
-
-	if err == sql.ErrNoRows {
-		// User does not exist; register them
-		newUserID := uuid.New()
-
-		_, err = s.DB.Exec(
-			`INSERT INTO cooks (id, name, email, clerk_id, profile_picture)
-             VALUES ($1, $2, $3, $4, $5)`,
-			newUserID, req.Name, req.Email, req.ClerkUserID, req.ProfilePicture,
-		)
-		if err != nil {
-			// Log the error for debugging
-			fmt.Printf("Error inserting user: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
-			return
-		}
-
-		existingUser = models.Cook{
-			ID:             newUserID,
-			Name:           req.Name,
-			Email:          req.Email,
-			ClerkId:        req.ClerkUserID,
-			ProfilePicture: req.ProfilePicture,
-		}
-	} else if err != nil {
-		// Database error
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	} else {
-		// User exists; update their clerk_id if different
-		if existingUser.ClerkId != req.ClerkUserID {
-			_, err = s.DB.Exec(
-				"UPDATE cooks SET clerk_id=$1 WHERE id=$2",
-				req.ClerkUserID, existingUser.ID,
-			)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
-				return
-			}
-			existingUser.ClerkId = req.ClerkUserID
-		}
-	}
-
-	// Return the user's backend userId (UUID)
-	c.JSON(http.StatusOK, gin.H{"user_id": existingUser.ID})
-}
-
-func (s *CookService) TestGet(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Cook service is up and running"})
-}
-
-// View cook profile
-func (s *CookService) ViewProfile(c *gin.Context) {
-	cookIDStr := c.GetHeader("cookID")
-	if cookIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cook ID is required in header"})
-		return
-	}
-
-	cookID, err := uuid.Parse(cookIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cook ID format"})
-		return
-	}
-
-	var cook models.Cook
-	err = s.DB.QueryRow(
-		"SELECT id, name, email, profile_picture FROM cooks WHERE id=$1",
-		cookID,
-	).Scan(&cook.ID, &cook.Name, &cook.Email, &cook.ProfilePicture)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Cook not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"profile": cook})
-}
-
-// Update cook profile
-func (s *CookService) UpdateProfile(c *gin.Context) {
-	// Securely retrieve cookID from context
-	cookIDStr := c.GetHeader("cookID")
-	if cookIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cook ID is required in header"})
-		return
-	}
-
-	cookID, err := uuid.Parse(cookIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cook ID format"})
-		return
-	}
-
-	var req models.Profile
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Begin transaction
-	tx, err := s.DB.Begin()
-	if err != nil {
-		// log.Errorf("Failed to begin transaction: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-		return
-	}
-	defer tx.Rollback()
-
-	// Check for existing email or name
-	if req.Email != "" || req.Name != "" {
-		conditions := []string{}
-		args := []interface{}{}
-		argID := 1
-
-		if req.Email != "" {
-			conditions = append(conditions, fmt.Sprintf("email=$%d", argID))
-			args = append(args, req.Email)
-			argID++
-		}
-		if req.Name != "" {
-			conditions = append(conditions, fmt.Sprintf("name=$%d", argID))
-			args = append(args, req.Name)
-			argID++
-		}
-
-		args = append(args, cookID)
-		checkQuery := fmt.Sprintf("SELECT id FROM cooks WHERE (%s) AND id != $%d", strings.Join(conditions, " OR "), argID)
-
-		var existingCookID uuid.UUID
-		err := tx.QueryRow(checkQuery, args...).Scan(&existingCookID)
-		if err == nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Email or name is already in use"})
-			return
-		} else if err != sql.ErrNoRows {
-			// log.Errorf("Error checking existing cook: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-			return
-		}
-	}
-
-	// Build the UPDATE statement
-	updates := []string{}
-	args := []interface{}{}
-	argID := 1
-
-	if req.Name != "" {
-		updates = append(updates, fmt.Sprintf("name=$%d", argID))
-		args = append(args, req.Name)
-		argID++
-	}
-	if req.Email != "" {
-		updates = append(updates, fmt.Sprintf("email=$%d", argID))
-		args = append(args, req.Email)
-		argID++
-	}
-	if req.ProfilePicture != "" {
-		updates = append(updates, fmt.Sprintf("profile_picture=$%d", argID))
-		args = append(args, req.ProfilePicture)
-		argID++
-	}
-
-	if len(updates) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No fields to update"})
-		return
-	}
-
-	args = append(args, cookID)
-	query := fmt.Sprintf("UPDATE cooks SET %s WHERE id=$%d", strings.Join(updates, ", "), argID)
-
-	// Execute the update
-	_, err = tx.Exec(query, args...)
-	if err != nil {
-		// log.Errorf("Failed to update profile for cookID %s: %v", cookID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
-		return
-	}
-
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		// log.Errorf("Failed to commit transaction: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-		return
-	}
-
-	// Retrieve and return the updated profile
-	var updatedProfile models.Profile
-	err = s.DB.QueryRow(
-		"SELECT name, email, profile_picture FROM cooks WHERE id=$1",
-		cookID,
-	).Scan(&updatedProfile.Name, &updatedProfile.Email, &updatedProfile.ProfilePicture)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve updated profile"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"profile": updatedProfile})
-}
-
-// Get favorite menus
+// GetFavoriteMenus retrieves the favorite menus for the authenticated user.
 func (s *CookService) GetFavoriteMenus(c *gin.Context) {
-	cookIDStr := c.GetHeader("cookID")
-	if cookIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cook ID is required in header"})
-		return
-	}
+	// Get the user ID from the context
+	userID := c.MustGet("user").(string)
 
-	cookID, err := uuid.Parse(cookIDStr)
+	// Query to get the favorite menu IDs for the user
+	query := `SELECT menu_id FROM favorite_menus WHERE user_id = $1`
+	rows, err := s.DB.Query(query, userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cook ID format"})
-		return
-	}
-
-	rows, err := s.DB.Query(
-		"SELECT id, menu_id FROM favorite_menus WHERE user_id=$1",
-		cookID,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve favorite menus"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error querying favorite menus",
+			"userId": userID,
+		})
 		return
 	}
 	defer rows.Close()
 
-	var favoriteMenus []models.FavoriteMenu
+	// Collect the menu IDs
+	var menuIDs []string
 	for rows.Next() {
-		var fm models.FavoriteMenu
-		err := rows.Scan(&fm.ID, &fm.MenuID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read favorite menu"})
+		var menuID string
+		if err := rows.Scan(&menuID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning menu IDs"})
 			return
 		}
-		favoriteMenus = append(favoriteMenus, fm)
+		menuIDs = append(menuIDs, menuID)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"favorite_menus": favoriteMenus})
+	// Return the favorite menu IDs
+	c.JSON(http.StatusOK, gin.H{"favorite_menus": menuIDs})
 }
 
-// Add a favorite menu
+// AddFavoriteMenu adds a menu to the user's list of favorite menus.
 func (s *CookService) AddFavoriteMenu(c *gin.Context) {
-	cookIDStr := c.GetHeader("cookID")
-	if cookIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cook ID is required in header"})
+	// Get the user ID from the context
+	userID := c.MustGet("user").(string)
+
+	// Get the menu ID from the request body
+	var requestData struct {
+		MenuID string `json:"menu_id"`
+	}
+	if err := c.ShouldBindJSON(&requestData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
 		return
 	}
 
-	cookID, err := uuid.Parse(cookIDStr)
+	// Generate a new UUID for the favorite_menus entry
+	entryID := uuid.New()
+
+	// Insert the favorite menu into the database
+	query := `INSERT INTO favorite_menus (id, user_id, menu_id) VALUES ($1, $2, $3)`
+	_, err := s.DB.Exec(query, entryID, userID, requestData.MenuID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cook ID format"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error adding favorite menu"})
 		return
 	}
 
-	var req models.FavoriteMenu
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-		return
-	}
-
-	favoriteMenuID := uuid.New()
-	_, err = s.DB.Exec(
-		`INSERT INTO favorite_menus (id, user_id, menu_id)
-         VALUES ($1, $2, $3)`,
-		favoriteMenuID, cookID, req.MenuID,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add favorite menu"})
-		return
-	}
-
-	s.GetFavoriteMenus(c)
+	// Return success message
+	c.JSON(http.StatusOK, gin.H{"message": "Favorite menu added"})
 }
 
-// Remove a favorite menu
+// RemoveFavoriteMenu removes a menu from the user's list of favorite menus.
 func (s *CookService) RemoveFavoriteMenu(c *gin.Context) {
-	cookIDStr := c.GetHeader("cookID")
-	if cookIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cook ID is required in header"})
+	// Get the user ID from the context
+	userID := c.MustGet("user").(string)
+
+	// Get the menu ID from the URL parameter
+	menuID := c.Param("menu_id")
+
+	// Delete the favorite menu from the database
+	query := `DELETE FROM favorite_menus WHERE user_id = $1 AND menu_id = $2`
+	result, err := s.DB.Exec(query, userID, menuID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error removing favorite menu"})
 		return
 	}
 
-	cookID, err := uuid.Parse(cookIDStr)
+	// Check if any row was deleted
+	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cook ID format"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking deletion result"})
+		return
+	}
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Favorite menu not found"})
 		return
 	}
 
-	menuIDStr := c.Param("menu_id")
-	menuID, err := uuid.Parse(menuIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid menu ID format"})
-		return
-	}
-
-	_, err = s.DB.Exec(
-		"DELETE FROM favorite_menus WHERE user_id=$1 AND menu_id=$2",
-		cookID, menuID,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove favorite menu"})
-		return
-	}
-
-	s.GetFavoriteMenus(c)
-}
-
-// Helper function to hash the clerk ID
-func hashClerkId(clerkId string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(clerkId), bcrypt.DefaultCost)
-	if err != nil {
-		return "", fmt.Errorf("failed to hash clerkId: %w", err)
-	}
-	return string(bytes), nil
+	// Return success message
+	c.JSON(http.StatusOK, gin.H{"message": "Favorite menu removed"})
 }
