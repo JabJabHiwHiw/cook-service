@@ -67,7 +67,7 @@ func main() {
 	router := gin.Default()
 
 	config := cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:3001", "https://hiw-hiw.vercel.app"},
+		AllowOrigins:     []string{"http://localhost:3000", "https://hiw-hiw.vercel.app"}, // localhost 3000 for development, vercel app for production
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
@@ -79,7 +79,6 @@ func main() {
 	router.GET("/user/profile", cookService.ViewProfile)
 	router.PUT("/user/profile", cookService.UpdateProfile)
 	router.POST("/user/oauth/google", cookService.HandleGoogleOAuth)
-	router.POST("/user/register", cookService.VerifyCookDetails)
 	router.GET("/user/favorite-menus", cookService.GetFavoriteMenus)
 	router.POST("/user/favorite-menus", cookService.AddFavoriteMenu)
 	router.DELETE("/user/favorite-menus/:menu_id", cookService.RemoveFavoriteMenu)
