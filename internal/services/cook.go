@@ -90,50 +90,6 @@ func (s *CookService) TestGet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Cook service is up and running"})
 }
 
-// Register a new cook
-func (s *CookService) VerifyCookDetails(c *gin.Context) {
-	var req models.Profile
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-		return
-	}
-
-	// Check if the cook already exists
-	var existingCookID uuid.UUID
-	err := s.DB.QueryRow(
-		"SELECT id FROM cooks WHERE email=$1 OR name=$2",
-		req.Email, req.Name,
-	).Scan(&existingCookID)
-	if err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Cook already exists with the given email or name"})
-		return
-	} else if err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing cook"})
-		return
-	}
-
-	// Hash the clerk_id
-	hashedClerkId, err := hashClerkId(req.ClerkId)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash clerk ID"})
-		return
-	}
-
-	// Insert the new cook
-	newCookID := uuid.New()
-	_, err = s.DB.Exec(
-		`INSERT INTO cooks (id, name, email, clerk_id, profile_picture)
-         VALUES ($1, $2, $3, $4, $5)`,
-		newCookID, req.Name, req.Email, hashedClerkId, req.ProfilePicture,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register cook"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"profile": req})
-}
-
 // View cook profile
 func (s *CookService) ViewProfile(c *gin.Context) {
 	cookIDStr := c.GetHeader("cookID")
